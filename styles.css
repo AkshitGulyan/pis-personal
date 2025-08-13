@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Futuristic starfield background for landing */
+.starfield {
+  background: radial-gradient(ellipse at bottom, #0a0a1a 0%, #000 100%);
+  position: relative;
+  overflow: hidden;
+}
+.starfield::before, .starfield::after {
+  content: "";
+  position: absolute;
+  top: -2000px; left: 0; right: 0; bottom: 0;
+  background: transparent url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="3" height="3"><circle cx="1" cy="1" r="1" fill="white"/></svg>') repeat;
+  animation: drift 120s linear infinite;
+  opacity: .6;
+}
+.starfield::after { opacity: .3; animation-duration: 180s; }
+
+@keyframes drift { from { transform: translateY(0); } to { transform: translateY(2000px); } }
+
+/* Glassmorphism card */
+.card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+/* Chatbot */
+.chat-fab {
+  position: fixed; bottom: 20px; right: 20px; z-index: 50;
+}
+.chat-window {
+  position: fixed; bottom: 80px; right: 20px; width: 360px; height: 460px;
+  background: rgba(17, 17, 25, 0.95);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px; overflow: hidden; z-index: 50;
+}
