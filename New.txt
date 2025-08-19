@@ -1,0 +1,155 @@
+import sqlite3
+from fastapi import FastAPI
+
+app = FastAPI()
+
+DB_PATH = "PIS.db"
+
+
+# -------------------------
+# GET all tools & categories
+# -------------------------
+@app.get("/kpi-data")
+def get_kpi_data():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT FeatureName, KPI_Count, Tool_Link, is_category FROM PIS_KPI")
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "FeatureName": r[0],
+            "KPI_Count": r[1],
+            "Tool_Link": r[2],
+            "is_category": bool(r[3])
+        }
+        for r in rows
+    ]
+
+
+# -------------------------
+# POST update hit count
+# -------------------------
+@app.post("/update-hit/{feature_name}")
+def update_hit(feature_name: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # increment in PIS_KPI
+    cursor.execute(
+        "UPDATE PIS_KPI SET KPI_Count = KPI_Count + 1 WHERE FeatureName = ?",
+        (feature_name,)
+    )
+
+    # log into history
+    cursor.execute(
+        "INSERT INTO KPI_History (FeatureName, KPI_Count) "
+        "VALUES (?, (SELECT KPI_Count FROM PIS_KPI WHERE FeatureName = ?))",
+        (feature_name, feature_name)
+    )
+
+    conn.commit()
+    conn.close()
+    return {"message": f"Hit count updated for {feature_name}"}
+
+
+# -------------------------
+# GET timeline history
+# -------------------------
+@app.get("/kpi-history/{feature_name}")
+def get_kpi_history(feature_name: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT KPI_Count, timestamp FROM KPI_History
+        WHERE FeatureName = ?
+        ORDER BY timestamp ASC
+        LIMIT 20
+    """, (feature_name,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"count": r[0], "time": r[1]} for r in rows]
+
+
+
+
+
+
+
+
+
+sparkline.jsx
+
+
+
+import { LineChart, Line, ResponsiveContainer } from "recharts";
+
+export default function Sparkline({ data }) {
+  return (
+    <div className="h-16 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <Line
+            type="monotone"
+            dataKey="count"
+            stroke="#00ffcc"
+            strokeWidth={2}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+
+
+
+
+
+Toolcard.jsx
+
+
+
+import { useEffect, useState } from "react";
+import Sparkline from "./Sparkline";
+
+export default function ToolCard({ data, onHit }) {
+  const [history, setHistory] = useState([]);
+
+  const fetchHistory = () => {
+    fetch(`/kpi-history/${encodeURIComponent(data.FeatureName)}`)
+      .then((res) => res.json())
+      .then((res) => setHistory(res));
+  };
+
+  useEffect(() => {
+    fetchHistory();
+    const interval = setInterval(fetchHistory, 5000); // refresh every 5 sec
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleClick = () => {
+    fetch(`/update-hit/${encodeURIComponent(data.FeatureName)}`, {
+      method: "POST"
+    }).then(() => {
+      onHit(data.FeatureName);
+      fetchHistory();
+    });
+
+    if (data.Tool_Link) {
+      window.open(data.Tool_Link, "_blank", "noopener noreferrer");
+    }
+  };
+
+  return (
+    <div
+      onClick={handleClick}
+      className="p-6 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700 transition"
+    >
+      <h2 className="text-xl font-semibold">{data.FeatureName}</h2>
+      <p className="text-gray-400 mb-2">Hits: {data.KPI_Count}</p>
+      <Sparkline data={history} />
+    </div>
+  );
+}
