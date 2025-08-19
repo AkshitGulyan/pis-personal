@@ -1,0 +1,135 @@
+@app.get("/kpi-data")
+def get_kpi_data():
+    conn = sqlite3.connect("PIS.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT FeatureName, KPI_Count, Tool_Link, is_category FROM PIS_KPI")
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "FeatureName": r[0],
+            "KPI_Count": r[1],
+            "Tool_Link": r[2],
+            "is_category": bool(r[3])
+        }
+        for r in rows
+    ]
+
+
+
+
+@app.post("/update-hit/{feature_name}")
+def update_hit(feature_name: str):
+    conn = sqlite3.connect("PIS.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE PIS_KPI SET KPI_Count = KPI_Count + 1 WHERE FeatureName = ?",
+        (feature_name,)
+    )
+    conn.commit()
+    conn.close()
+    return {"message": "Hit count updated"}
+
+
+
+
+
+
+
+
+
+toolcard.jsx
+
+export default function ToolCard({ data, onHit }) {
+  const handleClick = () => {
+    // 1. Update hit count in backend
+    fetch(`/update-hit/${encodeURIComponent(data.FeatureName)}`, {
+      method: "POST"
+    }).then(() => {
+      onHit(data.FeatureName); // update in UI instantly
+    });
+
+    // 2. Open tool link in new tab
+    if (data.Tool_Link) {
+      window.open(data.Tool_Link, "_blank", "noopener noreferrer");
+    }
+  };
+
+  return (
+    <div
+      onClick={handleClick}
+      className="p-6 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700 transition"
+    >
+      <h2 className="text-xl font-semibold">{data.FeatureName}</h2>
+      <p className="text-gray-400">Hits: {data.KPI_Count}</p>
+    </div>
+  );
+}
+
+
+
+dashboard.jax 
+
+import { useEffect, useState } from "react";
+import ToolCard from "../components/ToolCard";
+import CategoryCard from "../components/CategoryCard";
+import Chatbot from "../components/Chatbot";
+import { getKpiData } from "../api";
+
+export default function Dashboard() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getKpiData().then((res) => {
+      setData(res);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleHitUpdate = (featureName) => {
+    setData((prev) =>
+      prev.map((item) =>
+        item.FeatureName === featureName
+          ? { ...item, KPI_Count: item.KPI_Count + 1 }
+          : item
+      )
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
+        Loading dashboard...
+      </div>
+    );
+  }
+
+  const categories = data.filter((d) => d.is_category);
+  const tools = data.filter((d) => !d.is_category);
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <h1 className="text-3xl font-bold mb-6">🚀 PIS Dashboard</h1>
+
+      {/* Categories */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {categories.map((cat) => (
+          <CategoryCard key={cat.FeatureName} data={cat} />
+        ))}
+      </div>
+
+      {/* Tools */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tools.map((tool) => (
+          <ToolCard key={tool.FeatureName} data={tool} onHit={handleHitUpdate} />
+        ))}
+      </div>
+
+      {/* Chatbot */}
+      <Chatbot />
+    </div>
+  );
+}
+
+
